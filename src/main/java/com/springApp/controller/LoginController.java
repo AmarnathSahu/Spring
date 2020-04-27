@@ -26,93 +26,57 @@ import java.util.List;
 @RequestMapping("users")
 public class LoginController {
 
-    private static final Logger logger = LoggerFactory.getLogger(LoginController.class);
+	private static final Logger logger = LoggerFactory.getLogger(LoginController.class);
 
-    @Autowired
-    private UserService userService;
+	@Autowired
+	private UserService userService;
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+	@Autowired
+	private AuthenticationManager authenticationManager;
 
-    @Autowired
-    JwtTokenProvider tokenProvider;
+	@Autowired
+	JwtTokenProvider tokenProvider;
 
-    @Autowired
-    UserRepository userRepository;
+	@Autowired
+	UserRepository userRepository;
 
-//    @Autowired
-//    MailSender mailSender;
+	@CrossOrigin
+	@RequestMapping(value = "/register", method = RequestMethod.POST, consumes = "application/json", produces = "application/json")
+	public ResponseEntity<?> createUser(@RequestBody User newUser) {
+		if (userService.find(newUser.getUsername()) != null) {
+			logger.error("username Already exist " + newUser.getUsername());
+			return new ResponseEntity<CustomErrorType>(
+					new CustomErrorType("user with username " + newUser.getUsername() + "already exist "),
+					HttpStatus.CONFLICT);
+		}
+		newUser.setRole("USER");
 
+		return new ResponseEntity<User>(userService.save(newUser), HttpStatus.CREATED);
+	}
 
-    @CrossOrigin
-    @RequestMapping(value = "/register", method = RequestMethod.POST, consumes = "application/json", produces = "application/json")
-    public ResponseEntity<?> createUser(@RequestBody User newUser) {
-        if (userService.find(newUser.getUsername()) != null) {
-            logger.error("username Already exist " + newUser.getUsername());
-            return new ResponseEntity(
-                    new CustomErrorType("user with username " + newUser.getUsername() + "already exist "),
-                    HttpStatus.CONFLICT);
-        }
-        newUser.setRole("USER");
+	@PostMapping("/signin")
+	public ResponseEntity<?> authenticateUser(@Valid @RequestBody User loginRequest) {
 
-        return new ResponseEntity<User>(userService.save(newUser), HttpStatus.CREATED);
-    }
+		Authentication authentication = authenticationManager.authenticate(
+				new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
 
-    // this is the login api/service
-//    @CrossOrigin
-//    @RequestMapping("/login")
-//    public Principal user(Principal principal) {
-//        logger.info("user logged "+principal);
-//        return principal;
-//    }
+		SecurityContextHolder.getContext().setAuthentication(authentication);
 
+		String jwt = tokenProvider.generateToken(authentication);
+		return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
+	}
 
-    @PostMapping("/signin")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody User loginRequest) {
+	@RequestMapping(value = "/getAllUsers", method = RequestMethod.GET)
+	public ResponseEntity<?> returnAllUsers(@CurrentUser User user) {
+		logger.info(user.toString());
+		List<User> users = userRepository.findAll();
+		return ResponseEntity.ok(users);
+	}
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequest.getUsername(),
-                        loginRequest.getPassword()
-                )
-        );
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        String jwt = tokenProvider.generateToken(authentication);
-        return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
-    }
-
-
-    @RequestMapping(value = "/getAllUsers", method = RequestMethod.GET)
-    public ResponseEntity<?> returnAllUsers(@CurrentUser User user){
-        logger.info(user.toString());
-        List<User> users = userRepository.findAll();
-        return ResponseEntity.ok(users);
-    }
-
-
-    @RequestMapping(value = "/logout",method = RequestMethod.GET)
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(HttpSession session) {
-        session.invalidate();
-    }
-
-//    @RequestMapping(value = "/sendEmail", method = RequestMethod.POST)
-//    public ResponseEntity<?> sendEmailService(@RequestBody Object body){
-//
-//        Gson gson = new Gson();
-//        JsonElement jsonElement = gson.toJsonTree(body);
-//        JsonObject jsonObject = jsonElement.getAsJsonObject();
-//        String from = jsonObject.get("from").getAsString();
-//        String to = jsonObject.get("to").getAsString();
-//        String mailBody = jsonObject.get("subject").getAsString();
-//        String subject = jsonObject.get("body").getAsString();
-//
-//        mailSender.sendEmail(from,to,subject,mailBody);
-//
-//        return ResponseEntity.ok("success");
-//    }
-
+	@RequestMapping(value = "/logout", method = RequestMethod.GET)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void logout(HttpSession session) {
+		session.invalidate();
+	}
 
 }
